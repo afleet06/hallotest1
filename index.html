@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0512">
+  <meta name="description" content="Video de fondo en loop con capa de contenido superior">
+  <title>Mi Página</title>
+
+  <style>
+    /* ===== Reset y base ===== */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background-color: #0a0512;
+      color: #ffffff;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ============================================================
+       CAPA 1: VIDEO DE FONDO EN LOOP (9:16)
+       ============================================================ */
+    .video-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      /* Gradiente de respaldo: se ve bien mientras carga el video
+         o en conexiones lentas / modo ahorro de energía */
+      background: linear-gradient(135deg, #1a0f2e 0%, #411793 55%, #b156cd 100%);
+    }
+
+    /* Video difuminado que rellena TODA la pantalla */
+    .video-bg .video-blur {
+      position: absolute;
+      inset: -10%;
+      width: 120%;
+      height: 120%;
+      object-fit: cover;
+      filter: blur(60px) brightness(0.4) saturate(1.4);
+      transform: scale(1.1) translateZ(0);
+      will-change: transform;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    /* Video principal — centrado, sin sobrepasar su resolución nativa */
+    .video-bg .video-main {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) translateZ(0);
+      width: 100vw;
+      height: 100dvh;
+      height: 100vh;
+      object-fit: contain;
+      image-rendering: auto;
+      backface-visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    /* Cuando el video está listo → se hace visible con fade-in */
+    .video-bg.is-ready .video-blur,
+    .video-bg.is-ready .video-main {
+      opacity: 1;
+    }
+
+    /* Overlay oscuro para contraste */
+    .video-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(10, 5, 18, 0.20) 0%,
+        rgba(10, 5, 18, 0.60) 100%
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ============================================================
+       BOTÓN "TOCA PARA REPRODUCIR" (solo si autoplay falla,
+       típico en iPhone con Modo de Bajo Consumo)
+       ============================================================ */
+    .tap-to-play {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 5, 18, 0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      cursor: pointer;
+      pointer-events: auto;
+      border: 0;
+      color: #fff;
+      font: inherit;
+    }
+
+    .tap-to-play.is-visible {
+      display: flex;
+    }
+
+    .tap-to-play .tap-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.5rem 2rem;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      text-align: center;
+    }
+
+    .tap-to-play svg {
+      width: 56px;
+      height: 56px;
+      color: #fff;
+    }
+
+    .tap-to-play span {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    /* ============================================================
+       CAPA 2: CONTENIDO
+       ============================================================ */
+    .content-layer {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      min-height: 100dvh;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    /* ============================================================
+       ESTILOS DE EJEMPLO (reemplázalos por los tuyos)
+       ============================================================ */
+    .card {
+      width: min(100%, 640px);
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+      text-align: center;
+    }
+
+    .card h1 {
+      margin: 0 0 1rem;
+      font-size: clamp(1.75rem, 5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .card p {
+      margin: 0 0 1.5rem;
+      font-size: clamp(1rem, 2.5vw, 1.125rem);
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .card .btn {
+      display: inline-block;
+      padding: 0.875rem 2rem;
+      background: linear-gradient(135deg, #411793 0%, #b156cd 100%);
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 8px 24px rgba(65, 23, 147, 0.5);
+    }
+
+    .card .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(177, 86, 205, 0.6);
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 520px) {
+      .content-layer { padding: 1rem; }
+      .card { padding: 2rem 1.25rem; }
+    }
+
+    /* ===== Accesibilidad ===== */
+    a:focus-visible,
+    button:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid #b156cd;
+      outline-offset: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .video-bg .video-main,
+      .video-bg .video-blur { display: none; }
+      .video-bg {
+        background: linear-gradient(135deg, #1a0f2e 0%, #411793 100%);
+      }
+      .video-bg .video-main,
+      .video-bg .video-blur { transition: none; }
+      .card .btn:hover { transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       CAPA 1: VIDEO DE FONDO EN LOOP
+       "video.mp4" debe estar en la MISMA carpeta que este HTML.
+       ============================================================ -->
+  <div class="video-bg" id="videoBg" aria-hidden="true">
+    <!-- Versión difuminada: rellena los laterales -->
+    <video class="video-blur"
+           autoplay muted loop playsinline preload="auto"
+           webkit-playsinline disablepictureinpicture>
+      <source src="video.mp4" type="video/mp4">
+    </video>
+
+    <!-- Versión principal -->
+    <video class="video-main"
+           autoplay muted loop playsinline preload="auto"
+           webkit-playsinline disablepictureinpicture
+           poster="">
+      <source src="video.mp4" type="video/mp4">
+      Tu navegador no soporta video HTML5.
+    </video>
+  </div>
+
+  <!-- ============================================================
+       BOTÓN "TOCA PARA REPRODUCIR" (solo aparece si el autoplay falla)
+       ============================================================ -->
+  <button class="tap-to-play" id="tapToPlay" type="button" aria-label="Reproducir video de fondo">
+    <div class="tap-inner">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+      <span>Toca para reproducir</span>
+    </div>
+  </button>
+
+  <!-- ============================================================
+       CAPA 2: CONTENIDO
+       👇 Aquí va TODO lo que quieras mostrar encima del video.
+       ============================================================ -->
+  <div class="content-layer">
+
+    <!-- ====== CONTENIDO DE EJEMPLO (reemplázalo) ====== -->
+    <div class="card">
+      <h1>Tu contenido aquí</h1>
+      <p>
+        Este es un contenedor de ejemplo. Sustituye este bloque por
+        el contenido que quieras mostrar sobre el video de fondo.
+      </p>
+      <button class="btn" type="button">Empezar</button>
+    </div>
+    <!-- ====== FIN DEL CONTENIDO DE EJEMPLO ====== -->
+
+  </div>
+
+  <!-- ============================================================
+       SCRIPT: manejo robusto del video (iOS + conexión lenta)
+       ============================================================ -->
+  <script>
+    (function () {
+      'use strict';
+
+      const bg        = document.getElementById('videoBg');
+      const mainVideo = bg.querySelector('.video-main');
+      const blurVideo = bg.querySelector('.video-blur');
+      const tapBtn    = document.getElementById('tapToPlay');
+
+      if (!mainVideo) return;
+
+      /* ---------------------------------------------------------
+         1) FIX iOS: forzar propiedades que iOS ignora si solo
+            están en el HTML (muted, playsinline, etc.)
+         --------------------------------------------------------- */
+      [mainVideo, blurVideo].forEach(v => {
+        if (!v) return;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('muted', '');
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
+      });
+
+      /* ---------------------------------------------------------
+         2) FIX conexión lenta: mostrar el video con fade-in
+            solo cuando esté realmente listo para reproducir.
+         --------------------------------------------------------- */
+      let hasMarkedReady = false;
+
+      function markReady() {
+        if (hasMarkedReady) return;
+        hasMarkedReady = true;
+        bg.classList.add('is-ready');
+      }
+
+      // Si ya está listo (caché), marcar inmediatamente
+      if (mainVideo.readyState >= 3) {
+        markReady();
+      } else {
+        mainVideo.addEventListener('canplay', markReady, { once: true });
+        // Respaldo: si canplay no llega en 8s, muestra el video igual
+        // (así no queda el fondo "vacío" en redes lentas)
+        setTimeout(markReady, 8000);
+      }
+
+      /* ---------------------------------------------------------
+         3) FIX iPhone: intentar reproducir y, si falla
+            (Modo Bajo Consumo, autoplay bloqueado, etc.),
+            mostrar el botón "Toca para reproducir".
+         --------------------------------------------------------- */
+      function tryPlay() {
+        const promises = [];
+
+        if (mainVideo.paused) {
+          const p = mainVideo.play();
+          if (p && typeof p.then === 'function') promises.push(p);
+        }
+        if (blurVideo && blurVideo.paused) {
+          const p = blurVideo.play();
+          if (p && typeof p.then === 'function') promises.push(p);
+        }
+
+        if (!promises.length) return Promise.resolve();
+
+        return Promise.all(promises).catch(() => {
+          // Falló el autoplay → mostrar overlay
+          showTapButton();
+          throw new Error('autoplay-blocked');
+        });
+      }
+
+      function showTapButton() {
+        if (tapBtn) tapBtn.classList.add('is-visible');
+      }
+
+      function hideTapButton() {
+        if (tapBtn) tapBtn.classList.remove('is-visible');
+      }
+
+      // Intento inicial
+      tryPlay().catch(() => {
+        /* el overlay ya se muestra dentro de showTapButton */
+      });
+
+      // Reintento al volver a la pestaña (a veces iOS sí deja al volver)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && mainVideo.paused) {
+          tryPlay().catch(() => {});
+        }
+      });
+
+      // Click en el botón "toca para reproducir"
+      if (tapBtn) {
+        tapBtn.addEventListener('click', () => {
+          mainVideo.muted = true;
+          mainVideo.play().then(() => {
+            if (blurVideo) blurVideo.play().catch(() => {});
+            hideTapButton();
+          }).catch(() => {
+            // Sigue bloqueado → dejamos el botón visible
+          });
+        });
+      }
+
+      /* ---------------------------------------------------------
+         4) Ajuste de tamaño sin pixelar (nunca upscalear)
+         --------------------------------------------------------- */
+      let rafId = null;
+
+      function fitVideo() {
+        const nw = mainVideo.videoWidth;
+        const nh = mainVideo.videoHeight;
+        if (!nw || !nh) return;
+
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const scale = Math.min(vw / nw, vh / nh, 1);
+        const w = Math.round(nw * scale);
+        const h = Math.round(nh * scale);
+
+        mainVideo.style.width  = w + 'px';
+        mainVideo.style.height = h + 'px';
+      }
+
+      function scheduleFit() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(fitVideo);
+      }
+
+      if (mainVideo.readyState >= 1) {
+        fitVideo();
+      } else {
+        mainVideo.addEventListener('loadedmetadata', fitVideo, { once: true });
+      }
+
+      window.addEventListener('resize', scheduleFit);
+      window.addEventListener('orientationchange', scheduleFit);
+    })();
+  </script>
+
+</body>
+</html>
